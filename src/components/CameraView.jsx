@@ -1,18 +1,19 @@
-import React, { useEffect, useState } from 'react';
-import { Button, message, Slider, Space } from 'antd';
+import React, {useEffect, useState} from 'react';
+import {Button, message, Select, Space} from 'antd';
 import {
-    FullscreenExitOutlined,
-    ArrowUpOutlined,
     ArrowDownOutlined,
     ArrowLeftOutlined,
     ArrowRightOutlined,
-    ZoomInOutlined
+    ArrowUpOutlined,
+    FullscreenExitOutlined,
+    ZoomInOutlined,
+    ZoomOutOutlined
 } from '@ant-design/icons';
-import { useLocation, useNavigate } from 'react-router-dom';
+import {useLocation, useNavigate} from 'react-router-dom';
 import styled from 'styled-components';
-import { TelescopeApi } from "../datasource/BackendClient";
-import { Room, RoomEvent } from 'livekit-client';
-import mqtt from 'mqtt';
+import {Room, RoomEvent} from 'livekit-client';
+import {useApiContext} from "../datasource/ApiContext";
+import {useUser} from "../datasource/UserProvider";
 
 const FullscreenContainer = styled.div`
     position: fixed;
@@ -86,33 +87,94 @@ const VideoContainer = styled.div`
     }
 `;
 
+const ListContainer = styled.div`
+  position: absolute;
+  left: 20px;
+  top: 20px;
+  width: 200px;
+  z-index: 1000;
+`;
+
 const CameraView = () => {
     const navigate = useNavigate();
     const location = useLocation();
-    const { telescopeId, isControlMode } = location.state || {};
-    const telescopeApi = new TelescopeApi('http://localhost:8000');
+    const {telescopeId, isControlMode, selectedTelescope, selectedUser} = location.state || {};
+    const {telescopeApi} = useApiContext()
     const [zoom, setZoom] = useState(1);
     const [room, setRoom] = useState(null);
     const [videoElement, setVideoElement] = useState(null);
     const [livekitToken, setLivekitToken] = useState(null);
+    const {setCurrentCost} = useUser();
+    const [startTime] = useState(new Date());
+    const [selectedTargets, setSelectedTargets] = useState([]);
 
-    const [mqttClient, setMqttClient] = useState(null);
+    const targetOptions = [
+        { value: 'Sun', label: 'Sun' },
+        { value: 'Venus', label: 'Venus' },
+        { value: 'Alpheratz', label: 'Alpheratz' },
+        { value: 'Schedar', label: 'Schedar' },
+        { value: 'Mirfak', label: 'Mirfak' },
+        { value: 'Capella', label: 'Capella' },
+        { value: 'Regulus', label: 'Regulus' },
+        { value: 'Dubhe', label: 'Dubhe' },
+        { value: 'Denebola', label: 'Denebola' },
+        { value: 'Gienah', label: 'Gienah' },
+        { value: 'Alioth', label: 'Alioth' },
+        { value: 'Spica', label: 'Spica' },
+        { value: 'Alkaid', label: 'Alkaid' },
+        { value: 'Arcturus', label: 'Arcturus' },
+        { value: 'Zubenelgenubi', label: 'Zubenelgenubi' },
+        { value: 'Kochab', label: 'Kochab' },
+        { value: 'Alphecca', label: 'Alphecca' },
+        { value: 'Antares', label: 'Antares' },
+        { value: 'Sabik', label: 'Sabik' },
+        { value: 'Shaula', label: 'Shaula' },
+        { value: 'Rasalhague', label: 'Rasalhague' },
+        { value: 'Eltanin', label: 'Eltanin' },
+        { value: 'Kaus Australis', label: 'Kaus Australis' },
+        { value: 'Vega', label: 'Vega' },
+        { value: 'Nunki', label: 'Nunki' },
+        { value: 'Altair', label: 'Altair' },
+        { value: 'Deneb', label: 'Deneb' },
+        { value: 'Enif', label: 'Enif' },
+        { value: 'Markab', label: 'Markab' },
+        { value: 'Polaris', label: 'Polaris' },
+        { value: 'Aries', label: 'Aries' }
+    ];
+
+    const handleTargetsChange = (values) => {
+        setSelectedTargets(values);
+
+        const req = {
+            interesting: values.map((value: string )=> value.toLowerCase())
+        }
+
+        console.log(req)
+
+        telescopeApi.publishInterested(
+            telescopeId,
+            req,
+            () => console.log('Interested targets updated'),
+            (error) => {
+                console.error('Failed to update interested targets:', error);
+                message.error('Failed to update interested targets');
+            }
+        )
+    };
 
     useEffect(() => {
-        // Connect to MQTT broker
-        const client = mqtt.connect('localhost:1883');
-
-        client.on('connect', () => {
-            console.log('Connected to MQTT broker');
-            setMqttClient(client);
-        });
+        // Cost tracking interval
+        const costInterval = setInterval(() => {
+            const elapsedMinutes = (new Date() - startTime) / (1000 * 60);
+            const additionalCost = elapsedMinutes * (selectedTelescope?.price_per_minute || 0);
+            console.log(`Elapsed minutes: ${elapsedMinutes}, additional cost: ${additionalCost}`);
+            setCurrentCost(prev => prev + additionalCost);
+        }, 60000); // Update every minute
 
         return () => {
-            if (mqttClient) {
-                mqttClient.end();
-            }
+            clearInterval(costInterval);
         };
-    }, []);
+    }, [startTime, selectedTelescope?.price_per_minute]);
 
     useEffect(() => {
         if (!telescopeId) {
@@ -123,7 +185,7 @@ const CameraView = () => {
 
         // Lock telescope and get LiveKit token
         telescopeApi.updateTelescopeState(
-            'id',
+            selectedUser.id,
             telescopeId,
             'LOCK',
             (response) => {
@@ -200,7 +262,7 @@ const CameraView = () => {
                 }
             });
 
-            await room.connect('ws://localhost:7880', token);
+            await room.connect(process.env.REACT_APP_LIVE_KIT_URL, token);
             setRoom(room);
             console.log('Connected to LiveKit room');
 
@@ -228,45 +290,55 @@ const CameraView = () => {
     };
 
     const sendMqttMessage = (type, value) => {
-        if (!mqttClient || !telescopeId) return;
 
-        const message = JSON.stringify({
-            type: type,
-            value: value
-        });
-
-        mqttClient.publish(telescopeId, message);
+        telescopeApi.controlTelescope(
+            telescopeId,
+            {
+                type: type,
+                value: value
+            },
+            (response) => {
+                console.log('Telescope control successful: ' + type + " " + value);
+            },
+            (error) => {
+                console.error('Failed to control telescope:', error);
+            }
+        )
     };
 
     const handleMove = (direction) => {
         let type = '';
         let value = 0;
 
-        switch(direction) {
+        switch (direction) {
             case 'right':
-                type = 'dx';
-                value = 0.1;
+                type = 'DX';
+                value = 0.05;
                 break;
             case 'left':
-                type = 'dx';
-                value = -0.1;
+                type = 'DX';
+                value = -0.05;
                 break;
             case 'up':
-                type = 'dy';
-                value = 0.1;
+                type = 'DY';
+                value = 0.05;
                 break;
             case 'down':
-                type = 'dy';
-                value = -0.1;
+                type = 'DY';
+                value = -0.05;
                 break;
         }
 
         sendMqttMessage(type, value);
     };
 
-    const handleZoom = (value) => {
-        setZoom(value);
-        sendMqttMessage('zoom', value);
+    const handleZoom = (direction) => {
+        const step = 0.1;
+        const deltZoom = direction === 'in' ? step : -1.0 * step;
+
+        setZoom(zoom + deltZoom);
+
+        sendMqttMessage('ZOOM', deltZoom);
     };
 
     return (
@@ -276,10 +348,10 @@ const CameraView = () => {
                     {isControlMode ? 'Control and View Mode' : 'View Mode'}
                 </div>
                 <Button
-                    icon={<FullscreenExitOutlined />}
+                    icon={<FullscreenExitOutlined/>}
                     onClick={handleExit}
                     type="text"
-                    style={{ color: 'white' }}
+                    style={{color: 'white'}}
                 >
                     Exit
                 </Button>
@@ -290,49 +362,59 @@ const CameraView = () => {
                         containerRef.innerHTML = '';
                         containerRef.appendChild(videoElement);
                     }
-                }} />
+                }}/>
+                <ListContainer>
+                    <Select
+                        mode="multiple"
+                        style={{ width: '100%' }}
+                        placeholder="Select interested"
+                        onChange={handleTargetsChange}
+                        options={targetOptions}
+                        value={selectedTargets}
+                        maxTagCount="responsive"
+                        dropdownStyle={{ background: 'rgba(0, 0, 0, 0.8)' }}
+                    />
+                </ListContainer>
                 {isControlMode && (
                     <ControlsContainer>
                         <MovementControls>
-                            <div />
+                            <div/>
                             <Button
-                                icon={<ArrowUpOutlined />}
+                                icon={<ArrowUpOutlined/>}
                                 onClick={() => handleMove('up')}
                                 className="center-btn"
                             />
-                            <div />
+                            <div/>
                             <Button
-                                icon={<ArrowLeftOutlined />}
+                                icon={<ArrowLeftOutlined/>}
                                 onClick={() => handleMove('left')}
                             />
-                            <div />
+                            <div/>
                             <Button
-                                icon={<ArrowRightOutlined />}
+                                icon={<ArrowRightOutlined/>}
                                 onClick={() => handleMove('right')}
                             />
-                            <div />
+                            <div/>
                             <Button
-                                icon={<ArrowDownOutlined />}
+                                icon={<ArrowDownOutlined/>}
                                 onClick={() => handleMove('down')}
                                 className="center-btn"
                             />
-                            <div />
+                            <div/>
                         </MovementControls>
                         <ZoomContainer>
-                            <Space direction="vertical" style={{ width: '100%' }}>
-                                <div>
-                                    <ZoomInOutlined /> Zoom
-                                </div>
-                                <Slider
-                                    min={1}
-                                    max={10}
-                                    step={0.1}
-                                    value={zoom}
-                                    onChange={handleZoom}
-                                    tooltip={{
-                                        formatter: value => `${value}x`
-                                    }}
-                                />
+                            <Space direction="vertical" style={{width: '100%'}}>
+                                <Space>
+                                    <Button
+                                        icon={<ZoomOutOutlined/>}
+                                        onClick={() => handleZoom('out')}
+                                    />
+                                    <span style={{color: 'white'}}>{zoom.toFixed(1)}x</span>
+                                    <Button
+                                        icon={<ZoomInOutlined/>}
+                                        onClick={() => handleZoom('in')}
+                                    />
+                                </Space>
                             </Space>
                         </ZoomContainer>
                     </ControlsContainer>

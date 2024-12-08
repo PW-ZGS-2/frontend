@@ -7,12 +7,14 @@ import React from "react";
 import TelescopeMapComponent from "./components/MapComponent";
 import CameraView from "./components/CameraView";
 import {BrowserRouter as Router, Route, Routes} from 'react-router-dom';
+import {UserProvider} from "./datasource/UserProvider";
 
 const {Content} = Layout;
 
 function App() {
     return (
         <ApiProvider>
+            <UserProvider>
                 <ConfigProvider
                     theme={{
                         components: {
@@ -65,6 +67,7 @@ function App() {
                         </Routes>
                     </Router>
                 </ConfigProvider>
+            </UserProvider>
         </ApiProvider>
     );
 }

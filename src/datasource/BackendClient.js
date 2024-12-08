@@ -20,8 +20,8 @@ export interface TelescopeSpecifications {
     optical_design: 'Reflector' | 'Refractor' | 'Catadioptric' | 'Schmidt-Cassegrain' | 'Maksutov' | 'Combination';
 }
 
-export interface Telescope {
-    model_name?: string;
+export interface TelescopeRequest {
+    telescope_name?: string;
     telescope_type?: 'MOCK' | 'OPEN_SOURCE' | 'PROFESSIONAL';
     price_per_minute?: number;
     owner?: string;
@@ -48,15 +48,24 @@ export interface TelescopesResponse {
 
 export interface RegisteredTelescope {
     telescope_id: string;
-    model_name: string;
-    price_per_day: number;
+    telescope_name: string;
+    price_per_minute: number;
     location: Location;
     status: 'FREE' | 'LOCK' | 'DAMAGED';
 }
 
+export interface ControlMessage {
+    type: string;
+    value: number;
+}
+
+export interface Interests {
+    interesting: string[];
+}
+
 export class TelescopeApi extends ClientBase {
     createTelescope(
-        telescope: Telescope,
+        telescope: TelescopeRequest,
         onComplete?: (data: PostTelescopeResponse) => void,
         errorSetter?: (error: RequestError) => void
     ) {
@@ -67,7 +76,7 @@ export class TelescopeApi extends ClientBase {
 
     updateTelescope(
         telescopeId: string,
-        telescope: Telescope,
+        telescope: TelescopeRequest,
         onComplete?: (data: PostTelescopeResponse) => void,
         errorSetter?: (error: RequestError) => void
     ) {
@@ -113,6 +122,28 @@ export class TelescopeApi extends ClientBase {
         errorSetter?: (error: RequestError) => void
     ) {
         return this.api.post(`/telescopes/${userId}/${telescopeId}/${state}`)
+            .then(r => this.nullSafeOnComplete(r, onComplete))
+            .catch(err => this.handleError(err, errorSetter));
+    }
+
+    controlTelescope(
+        telescopeId: string,
+        controlMessage: ControlMessage,
+        onComplete?: (data: any) => void,
+        errorSetter?: (error: RequestError) => void
+    ) {
+        return this.api.post(`/telescopes/control/${telescopeId}`, controlMessage)
+            .then(r => this.nullSafeOnComplete(r, onComplete))
+            .catch(err => this.handleError(err, errorSetter));
+    }
+
+    publishInterested(
+        telescopeId: string,
+        interests: Interests,
+        onComplete?: (data: any) => void,
+        errorSetter?: (error: RequestError) => void
+    ) {
+        return this.api.post(`/telescopes/interests/${telescopeId}`, interests)
             .then(r => this.nullSafeOnComplete(r, onComplete))
             .catch(err => this.handleError(err, errorSetter));
     }

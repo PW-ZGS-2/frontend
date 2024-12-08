@@ -234,7 +234,7 @@ components:
         model_name:
           type: string
           title: Model Name
-        price_per_day:
+        price_per_minute:
           type: number
           title: Price Per Day
         location:
@@ -245,7 +245,7 @@ components:
       required:
         - telescope_id
         - model_name
-        - price_per_day
+        - price_per_minute
         - location
         - status
       title: RegisteredTelescope

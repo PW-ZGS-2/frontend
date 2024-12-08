@@ -8,9 +8,9 @@ export class ApiContextType{
 }
 
 export const ApiProvider = ({children}) => {
-    const backendApi = new TelescopeApi(process.env.REACT_APP_BACKEND_API_BASE_URL)
+    const telescopeApi = new TelescopeApi(process.env.REACT_APP_BACKEND_API_BASE_URL)
     return (
-        <ApiContext.Provider value={{backendApi}}>
+        <ApiContext.Provider value={{telescopeApi: telescopeApi}}>
             {children}
         </ApiContext.Provider>
     );
